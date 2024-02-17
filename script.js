@@ -2,70 +2,109 @@ const canvas = document.querySelector('canvas')
 canvas.width = 1024
 canvas.height = 576
 const c = canvas.getContext('2d')
-const gravity = 0.5
+const gravity = 0.15
 const scaledCanvas = {
     width: canvas.width/4,
     height: canvas.height/4,
 }
 
 const floorCollisions2D = []
-for(let i = 0;i <floorCollisions.length;i+= 36){
-    floorCollisions2D.push(floorCollisions.slice(i,i + 36))
+for (let i = 0; i < floorCollisions.length; i += 36) {
+  floorCollisions2D.push(floorCollisions.slice(i, i + 36))
 }
 
-floorCollisions2D.forEach((row)=>{
-    row.forEach(symbol => {
-       if(symbol === 202){
-        console.log('block')
-       }
-    })
+const collisionBlocks = []
+floorCollisions2D.forEach((row, y) => {
+  row.forEach((symbol, x) => {
+    if (symbol === 202) {
+      collisionBlocks.push(
+        new CollisionBlock({
+          position: {
+            x: x * 16,
+            y: y * 16,
+          },
+        })
+      )
+    }
+  })
+})
+
+const platformCollisions2D = []
+for (let i = 0; i < platformCollisions.length; i += 36) {
+  platformCollisions2D.push(platformCollisions.slice(i, i + 36))
+}
+
+const platformCollisionBlocks = []
+platformCollisions2D.forEach((row, y) => {
+  row.forEach((symbol, x) => {
+    if (symbol === 202) {
+      platformCollisionBlocks.push(
+        new CollisionBlock({
+          position: {
+            x: x * 16,
+            y: y * 16,
+          },
+          height: 4,
+        })
+      )
+    }
+  })
 })
 
 let y = 100
 
-class Sprite {
-    constructor({position,imageSrc}){
-        this.position = position
-        this.image = new Image()
-        this.image.src = imageSrc
-    }
-    draw(){
-        if(!this.image)return
-        c.drawImage(this.image,this.position.x,this.position.y)
-    }
-    update(){
-        this.draw()
-    }
-}
-
-class Player{
-    constructor(position){
-        this.position = position
-        this.velocity = {
-            x:0,
-            y:1
-        }
-        this.height = 100
-    }
-    draw(){
-        c.fillStyle = "red" 
-        c.fillRect(this.position.x,this.position.y,100,this.height)
-    }
-    update(){
-        this.draw()
-        this.position.x += this.velocity.x
-        this.position.y += this.velocity.y
-         if(this.position.y + this.height + this.velocity.y < canvas.height){
-            this.velocity.y += gravity
-         }else{
-            this.velocity.y = 0
-         }
-        // this.velocity.y += 0.5
-    }
-}
-
-const player = new Player({x:0,y:0})
-const player2 = new Player({x:300,y:100})
+const player = new Player({
+    position:{
+        x:100,
+        y:300
+    },
+    collisionBlocks,
+    platformCollisionBlocks,
+    imageSrc: './img/warrior/Idle.png',
+    frameRate:8,
+    animations: {
+        Idle: {
+          imageSrc: './img/warrior/Idle.png',
+          frameRate: 8,
+          frameBuffer: 3,
+        },
+        Run: {
+          imageSrc: './img/warrior/Run.png',
+          frameRate: 8,
+          frameBuffer: 5,
+        },
+        Jump: {
+          imageSrc: './img/warrior/Jump.png',
+          frameRate: 2,
+          frameBuffer: 3,
+        },
+        Fall: {
+          imageSrc: './img/warrior/Fall.png',
+          frameRate: 2,
+          frameBuffer: 3,
+        },
+        FallLeft: {
+          imageSrc: './img/warrior/FallLeft.png',
+          frameRate: 2,
+          frameBuffer: 3,
+        },
+        RunLeft: {
+          imageSrc: './img/warrior/RunLeft.png',
+          frameRate: 8,
+          frameBuffer: 5,
+        },
+        IdleLeft: {
+          imageSrc: './img/warrior/IdleLeft.png',
+          frameRate: 8,
+          frameBuffer: 3,
+        },
+        JumpLeft: {
+          imageSrc: './img/warrior/JumpLeft.png',
+          frameRate: 2,
+          frameBuffer: 3,
+        },
+      },
+})
 const keys = {
     d: {
         pressed:false
@@ -82,23 +121,71 @@ const background = new Sprite({
     imageSrc: './img/background.png'
 })
 
+const backgroundImageHeight = 432
+
+const camera = {
+    position: {
+        x:0,
+        y:-backgroundImageHeight + scaledCanvas.height
+    }
+}
+
 function animate(){
+    requestAnimationFrame(animate)
     c.fillStyle = 'white'
     c.fillRect(0,0,canvas.width,canvas.height)
-
     c.save()
     c.scale(4,4)
-    c.translate(0,-background.image.height + scaledCanvas.height)
+    c.translate(camera.position.x,camera.position.y)
     background.update()
-    c.restore()
-
+    // collisionBlocks.forEach(collisionBlock => {
+    //     collisionBlock.update()
+    // })
+    // platformCollisionBlocks.forEach(collisionBlock => {
+    //     collisionBlock.update()
+    // })
+    player.checkForHorizontalCanvasCollision()
     player.update()
-    player2.update()
 
     player.velocity.x = 0
-    if(keys.d.pressed)player.velocity.x = 5
-    else if(keys.a.pressed)player.velocity.x = -5
-    requestAnimationFrame(animate)
+    if(keys.d.pressed){
+        player.switchSprite('Run')
+        player.velocity.x = 2
+        player.lastDirection = "right"
+        player.shouldPanCameraToTheLeft({canvas,camera})
+    }
+    else if(keys.a.pressed){
+        player.switchSprite('RunLeft')
+        player.velocity.x = -2
+        player.lastDirection = "left"
+        player.shouldPanCameraToTheRight({canvas,camera})
+    }
+    else if(player.velocity.y === 0){
+        if(player.lastDirection === 'right'){
+            player.switchSprite('Idle')
+        }else{
+            player.switchSprite('IdleLeft')
+        }
+    }
+
+    if(player.velocity.y < 0) {
+        player.shouldPanCameraToTheDown({canvas,camera})
+        if(player.lastDirection === 'right'){
+            player.switchSprite("Jump")
+        }else{
+            player.switchSprite("JumpLeft")
+        }
+}
+    else if (player.velocity.y > 0) {
+        player.shouldPanCameraToTheUp({canvas,camera})
+        if(player.lastDirection === 'right'){
+            player.switchSprite('Fall')
+        }else{
+            player.switchSprite('FallLeft')
+        }
+    }
+
+    c.restore()
 }
 
 animate()
@@ -112,7 +199,7 @@ window.addEventListener('keydown',(e) => {
             keys.a.pressed = true
             break
         case 'w':
-            player.velocity.y = -20
+            player.velocity.y = -4
     }
 })
 
