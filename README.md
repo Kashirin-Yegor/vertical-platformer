@@ -11,7 +11,6 @@
 
 ### 🛠 Installation & Running
 ```sh
-Копировать
 git clone https://github.com/Kashirin-Yegor/vertical-platformer.git
 cd vertical-platformer
 npm install
